@@ -41,6 +41,9 @@ class EmployeeLoginView(generics.CreateAPIView):
 
         user = get_object_or_404(Employee, email=email)
 
+        if not check_password(password, user.password):
+            return Response({'error': 'Invalid credentials'}, status=400)
+
         refresh = RefreshToken.for_user(user)
         return Response({
             'refresh': str(refresh),
