@@ -1,0 +1,12 @@
+Move to vertual environment: myvenv\Scripts\activate
+
+python manage.py makemigrations
+
+python manage.py migrate
+
+python manage.py runserver
+
+In browser :127.0.0.1:8000
+
+
+

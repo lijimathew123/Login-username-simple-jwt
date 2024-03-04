@@ -1,0 +1,12 @@
+For sharing dummy data from plsql to sqlite database 
+
+
+for creating json data for sharing: python manage.py dumpdata > dummy_data.json
+
+
+
+After sharing file, user should place this jsonfile in django project  and run command:
+
+
+
+ python manage.py loaddata dummy_data.json
