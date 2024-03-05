@@ -4,9 +4,15 @@ from .models import Employee
 class EmployeeRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
-        fields = ('email', 'password')
+        fields = ('username','email', 'password')
         extra_kwargs = {'password': {'write_only': True}}
 
+
+
 class EmployeeLoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    username = serializers.CharField()
     password = serializers.CharField()
+
+
+
+    
