@@ -1,1 +1,1 @@
-Code for registration and login using email and password in the folder registration.
+Code for registration and login using username and password in the folder registration. Use Simple JWT to do this
