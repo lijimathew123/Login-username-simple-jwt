@@ -1,7 +1,5 @@
 from ast import parse
-from django.shortcuts import render
-
-# Create your views here.
+from uuid import uuid4
 from django.shortcuts import render
 
 from rest_framework.views import APIView
@@ -15,9 +13,8 @@ from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import AllowAny,IsAuthenticated
 from django.http import Http404
-from django.shortcuts import get_object_or_404
-
-
+from django.shortcuts import get_object_or_404 
+from django.utils import timezone
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -25,18 +22,30 @@ from rest_framework import status
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 
-
-
-
-
-
-
-# Create your views here.
-
+from django.contrib.auth.hashers import make_password
+from django.contrib.auth import logout
 
 from rest_framework import generics
 
-from .models import CustomerType, PlatformCustomer,PlatformCustomerDetails,Organization,OrganizationBranch
+
+from .models import ( 
+    CustomerType,
+    PlatformCustomer,
+    PlatformCustomerDetails,
+    Organization,
+    OrganizationBranch,
+    UserLastLogin,
+    SocialChannel,
+    FieldType,
+    CustomerOrganization
+    
+)
+
+from Leads.models import DefaultLeadFields,DefaultLeadCategory
+from customer.models import  DefaultCustomerCategory,DefaultCustomerFields
+from company.models import DefaultCompanyFields
+
+
 from .serializers import (
     CustomerTypeSerializer,
     PlatformCustomerSerializer,
@@ -44,10 +53,20 @@ from .serializers import (
     PlatfromCustomerDetailsSerializer,
     OrganizationSerializer,
     OrganizationBranchSerializer,
-    PlatformCustomerSerializer2
+    PlatformCustomerSerializer2,
+    SocialChannelSerializer,
+    FieldTypeSerializer
+    
 )
 
-# ------------views for save customer types--- (check the needs of creating custome admin module)---------
+from bson import ObjectId
+
+from .mongo_connection import person_collection,default_lead_field,default_customer_field,default_company_field
+# person_collection = db['Last_login']
+# default_field = db['Default Field']
+
+
+# ------------views for save customer types--- (check the needs of creating custom admin module)---------
 
 class CustomerTypeListCreateView(generics.ListCreateAPIView):
     queryset = CustomerType.objects.all()
@@ -57,8 +76,9 @@ class CustomerTypeListCreateView(generics.ListCreateAPIView):
 
 
 
-from django.contrib.auth.hashers import make_password
-# ----------views for register platform  customer--------------
+
+
+# ----------views for register platform  customer--------------serializer_class
 class PlatformCustomerCreateView(generics.CreateAPIView):
     queryset = PlatformCustomer.objects.all()
     serializer_class = PlatformCustomerSerializer
@@ -71,32 +91,141 @@ class PlatformCustomerCreateView(generics.CreateAPIView):
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+    
+
+    # def perform_create(self, serializer):
+    #     # Get the current logged-in user
+    #     current_user = self.request.user
+    #     print(current_user.username)
+        
+        
+    #     if current_user.is_authenticated:
+    #         serializer.save(created_by=current_user)
+    #     else:
+    #         serializer.save()
 
 
     def perform_create(self, serializer):
-        print("--------------------------------")
-        print(serializer)
-        print("--------------------------------")
-        # Check if the registration is done by the user or by someone else
-        if self.request.user.is_authenticated:
+       
+        current_user = self.request.user
 
-            # If the user is logged in, set created_by to the logged-in user
 
-            serializer.save(created_by=self.request.user)
+        #  Get the organization id
+        organization_id = self.request.data.get('organization_id')
+        print(organization_id)
+        
+        # Get the customer type ID from the request data
+        customer_type_id = self.request.data.get('customer_type')
+        print(customer_type_id)
+        type_id=customer_type_id['type']
+
+        if customer_type_id:
+            try:
+                
+                customer_type = CustomerType.objects.get(id=type_id)
+                
+            except CustomerType.DoesNotExist:
+                pass  
+
+        # Save the PlatformCustomer object
+        if current_user.is_authenticated:
+            
+               serializer.save(created_by=current_user, customer_type=customer_type,created_at=timezone.now().timestamp())
+                    
+               if organization_id:
+                      organization = Organization.objects.get(id=organization_id)
+                      print(organization)
+                      if organization:
+                          print("organization fount!")
+                      CustomerOrganization.objects.create(customer=serializer.instance, organization=organization)
+
+
+
         else:
             # If the user is not logged in, leave created_by as null
-            serializer.save()
+            serializer.save(customer_type=customer_type,created_at=timezone.now().timestamp())
 
+            
+# ---------------------------views for update platformuser----------------------
+            
+class  PlatformUserUpdateView(APIView):
+    serializer_class = PlatformCustomerSerializer2
+    permission_classes=[IsAuthenticated]
 
+    
+    
+    def patch(self, request, *args, **kwargs):
+        email = request.data['email']
+        username=request.data['username']
+        password=make_password(request.data['password'])
+        first_name=request.data['first_name']   
+        last_name=request.data['last_name']
+        phone=request.data['phone']
+       
 
+        try:
+            
+            obj = self.requset.user
+            # Update the fields
+            obj.email = email
+            obj.first_name = first_name
+            obj.last_name = last_name
+            obj.phone = phone
+            obj.username = username
+            obj.password = password
+            obj.save()
+
+            serializer = self.serializer_class(obj, data=request.data, partial=True)
+            if serializer.is_valid(raise_exception=True):
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except PlatformCustomer.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
         
 
-        # return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+# ---------------------views for platform customer delete view------------------------
+class PlatformCustomerDeleteView(generics.DestroyAPIView):
+    serializer_class = PlatformCustomerSerializer
+    permission_classes = [IsAuthenticated]
+    def get_object(self):
+        return self.request.user
+
+    def perform_destroy(self, instance):
+       instance.delete()
+       return Response({'message': 'User deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+# -------------------- social media operation ----------------
+
+class SocialChannelsListAPIView(APIView):
+    def get(self, request):
+        social_channels = SocialChannel.objects.all()
+        serializer = SocialChannelSerializer(social_channels, many=True)
+        return Response(serializer.data)
 
 
 
-# --------------------display/update or delete the  sub-platform user crated by Main platform user----------------
-from django.contrib.auth.hashers import make_password
+# ----------------------display/update and  delete the  sub-platform user crated by Main platform user----------------
+class SubPlatformUserListView(generics.ListAPIView):
+    serializer_class = PlatformCustomerSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Get the organization_id from query parameters
+        organization_id = self.request.query_params.get('organization_id')
+
+        # Query CustomerOrganization to filter PlatformCustomer instances associated with the organization
+        queryset = PlatformCustomer.objects.filter(customerorganization__organization_id=organization_id)
+
+        return queryset
+
+
+#  ------------------------ update sub platform customer --------------------
+
 class  SubPlatformUserUpdateView(APIView):
     serializer_class = PlatformCustomerSerializer2
     permission_classes=[IsAuthenticated]
@@ -144,20 +273,33 @@ class  SubPlatformUserUpdateView(APIView):
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
     
 
+# ------------------------    delete a subplatform customer ------------------------------
 class SubPlatformUserDeleteView(generics.DestroyAPIView):
     serializer_class = PlatformCustomerSerializer
-    permission_classes=[IsAuthenticated]
-    
+    permission_classes = [IsAuthenticated]
     def get_queryset(self):
         return PlatformCustomer.objects.filter(created_by=self.request.user)
     
+    def destroy(self, request, *args, **kwargs):
+        user_id = kwargs.get('user_id')
+
+        try:
+            # Ensure the user exists and is a sub-platform user of the current user
+            sub_platform_user = self.get_queryset().get(id=user_id)
+            sub_platform_user.delete()
+
+            return Response({'message': 'Sub-platform user deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+        except PlatformCustomer.DoesNotExist:
+            return Response({'error': 'Sub-platform user not found'}, status=status.HTTP_404_NOT_FOUND)
+    
     
 
 
-# ---------views for platform customer login ----email and password used for login------------
+# ---------views for platform customer login ---- email and password used for login------------
     
-
 from helper.authentication import EmailBackend
+
 
 class PlatformCustomerLoginView(APIView):
     def post(self, request):
@@ -173,16 +315,32 @@ class PlatformCustomerLoginView(APIView):
         print(user)
         if user is not None:
             print("User successfully authenticated!") 
-            user.update_last_login() 
-            user.update_last_login(ip_address=get_client_ip(request))
-            print("reached the login")
+
+            # Update login details in MongoDB for success
+            login_document = {
+                'user_id': str(user.id),
+                'last_login': int(timezone.now().timestamp()),
+                'status': "Success",
+                'last_login_ip': get_client_ip(request),
+            }
+            person_collection.insert_one(login_document)
+            print("MongoDB login details updated for success")
+            
             # Authentication successful
             token, created = Token.objects.get_or_create(user=user)
             return Response({'token': token.key, 'user_id': user.id})
         else:
-            # Authentication failed
-            print("Authentication failed!")  # Add this line
+            print("Authentication failed!")  
+
+            # Update login details in MongoDB for failure
+            login_document = {
+                'status': "Failed",
+            }
+            person_collection.insert_one(login_document)
+            print("MongoDB login details updated for failure")
+            
             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
 
 # ------function for get client ip address------------
 def get_client_ip(request):
@@ -212,6 +370,7 @@ class PlatformCustomerDetailsCreateView(generics.CreateAPIView):
     
     
 # ----view for update extra details of platform customer----------------
+    
 class PlatformCustomerDetailsUpdateView(generics.RetrieveUpdateAPIView):
     queryset = PlatformCustomerDetails.objects.all()
     serializer_class = PlatfromCustomerDetailsSerializer
@@ -225,15 +384,41 @@ class PlatformCustomerDetailsUpdateView(generics.RetrieveUpdateAPIView):
     
 
 
+# ----------------view for register organization details(old view) ------------------------
+        
+# class OrganizationCreateView(generics.CreateAPIView):
+#     queryset = Organization.objects.all()
+#     serializer_class = OrganizationSerializer
+#     permission_classes = [IsAuthenticated]
 
-# ----------------view for register organization details ------------------------
+#     def create(self, request, *args, **kwargs):
+#         # Retrieve the current user from the token
+      
+#         current_user = request.user
+
+#         # Add the owner (current user) to the request data
+#         request.data['owner'] = current_user.id
+        
+       
+
+
+#         serializer = self.get_serializer(data=request.data)
+#         serializer.is_valid(raise_exception=True)
+#         self.perform_create(serializer)
+#         headers = self.get_success_headers(serializer.data)
+#         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+
+
+
+#    ---------------------------use this below view now and  do not delete below view!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! -----------------------------------------
 class OrganizationCreateView(generics.CreateAPIView):
     queryset = Organization.objects.all()
     serializer_class = OrganizationSerializer
     permission_classes = [IsAuthenticated]
 
     def create(self, request, *args, **kwargs):
-        # Retrieve the current user from the token
         current_user = request.user
 
         # Add the owner (current user) to the request data
@@ -242,41 +427,144 @@ class OrganizationCreateView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
+        # Now, handle storing DefaultLeadFields data in MongoDB
+        try:
+            # Retrieve all instances of DefaultLeadFields
+            all_leads = DefaultLeadFields.objects.all()
 
+            # Initialize an empty dictionary to store all lead data for each organization
+            organization_lead_data = {
+                'Type': 'Lead',
+                'organization_id': str(serializer.data['id']),
+                'fields': []
+            }
 
-# ---------------views for register organization branch details---------------
+            # Iterate over each lead instance
+            for lead in all_leads:
+                lead_data = {}
+                for field in lead._meta.fields:
+                    field_name = field.name
+                    if field.is_relation:
+                        related_object = getattr(lead, field_name)
+                        if related_object:
+                            related_object_data = {'id': str(related_object.id), 'name': str(related_object)}
+                            lead_data[field_name] = related_object_data
+                    else:
+                        field_value = getattr(lead, field_name)
+                        lead_data[field_name] = field_value
+                
+                # Append the lead data to the list
+                organization_lead_data['fields'].append(lead_data)
 
-class OrganizationBranchCreateView(generics.CreateAPIView):
-    queryset = OrganizationBranch.objects.all()
-    serializer_class = OrganizationBranchSerializer
-    permission_classes = [IsAuthenticated]
+            # Insert the organization's lead data into MongoDB
+            default_lead_field.insert_one(organization_lead_data)
+            print(organization_lead_data)
 
-    def create(self, request, *args, **kwargs):
-        # Retrieve the current user from the token
-        current_user = request.user
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except DefaultLeadFields.DoesNotExist:
+            pass
     
+
+        
+        try:
+            # Retrieve all instances of DefaultCustomerFields
+            all_customers = DefaultCustomerFields.objects.all()
+
+            # Initialize an empty dictionary to store all customer data for each organization
+            organization_customer_data = {
+                'Type': 'Customer',
+                'organization_id': str(serializer.data['id']),
+                'fields': []
+            }
+
+            # Iterate over each customer instance
+            for customer in all_customers:
+                customer_data = {}
+                for field in customer._meta.fields:
+                    field_name = field.name
+                    if field.is_relation:
+                        related_object = getattr(customer, field_name)
+                        if related_object:
+                            related_object_data = {'id': str(related_object.id), 'name': str(related_object)}
+                            customer_data[field_name] = related_object_data
+                    else:
+                        field_value = getattr(customer, field_name)
+                        customer_data[field_name] = field_value
+                
+                # Append the customer data to the list
+                organization_customer_data['fields'].append(customer_data)
+
+            # Insert the organization's customer data into MongoDB
+            default_customer_field.insert_one(organization_customer_data)
+
+        except DefaultCustomerFields.DoesNotExist:
+            pass
+
+
+        # Handle storing DefaultCompanyFields data in MongoDB
+        try:
+            # Retrieve all instances of DefaultCompanyFields
+            all_companies = DefaultCompanyFields.objects.all()
+
+            # Initialize an empty dictionary to store all company data for each organization
+            organization_company_data = {
+                'Type': 'Company',
+                'organization_id': str(serializer.data['id']),
+                'fields': []
+            }
+
+            # Iterate over each company instance
+            for company in all_companies:
+                company_data = {}
+                for field in company._meta.fields:
+                    field_name = field.name
+                    if field.is_relation:
+                        related_object = getattr(company, field_name)
+                        if related_object:
+                            related_object_data = {'id': str(related_object.id), 'name': str(related_object)}
+                            company_data[field_name] = related_object_data
+                    else:
+                        field_value = getattr(company, field_name)
+                        company_data[field_name] = field_value
+                
+                # Append the company data to the list
+                organization_company_data['fields'].append(company_data)
+
+            # Insert the organization's company data into MongoDB
+            default_company_field.insert_one(organization_company_data)
+
+        except DefaultCompanyFields.DoesNotExist:
+            pass
+
+
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+
+
 
 
 # ------------------views for display/update all the information of current logged platform user------------
     
-from . serializers import PlatformCustomerSerializer2
+
 class LoggedInUserDetailView(APIView):
     serializer_class = PlatformCustomerSerializer2
     permission_classes = [IsAuthenticated]
+
+
+    def get(self, request, *args, **kwargs):
+        # Retrieve the logged-in user
+        user = request.user
+        serializer = self.serializer_class(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def patch(self, request, *args, **kwargs):
         email = request.data['email']
         first_name=request.data['first_name']
         last_name=request.data['last_name']
         phone=request.data['phone']
+        
         obj = PlatformCustomer.objects.get(id = request.data['id'])
         obj.email = email
         obj.first_name = first_name
@@ -312,39 +600,100 @@ class OrganizationDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Retrieve organizations of the logged-in user
+      
         return Organization.objects.filter(owner=self.request.user)
-    
 
+    def get_object(self):
+        # Retrieve organization based on provided ID in the URL
+        organization_id = self.request.query_params.get('organization_id')
+        try:
+            return Organization.objects.get(owner=self.request.user, id=organization_id)
+        except Organization.DoesNotExist:
+            raise Http404("Organization does not exist for this user.")
+
+
+
+# ---------------views for register organization branch details---------------
+
+
+class OrganizationBranchCreateView(generics.CreateAPIView):
+    queryset = OrganizationBranch.objects.all()
+    serializer_class = OrganizationBranchSerializer
+    permission_classes = [IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        # Extract the organization ID from the request data
+        organization_id = request.data.get('organization_id')
+        
+        if not organization_id:
+            return Response({'error': 'Organization ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            organization = Organization.objects.get(id=organization_id)
+        except Organization.DoesNotExist:
+            return Response({'error': 'Organization does not exist'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Add the organization to the request data
+        request.data['organization_name'] = organization_id
+
+        # Create the organization branch
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    
 
     
 # ---------------views for displaying list of organization branches of a particular organization
 
 class OrganizationBranchListView(generics.ListAPIView):
     serializer_class = OrganizationBranchSerializer
+    queryset = OrganizationBranch.objects.all()
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Retrieve organization branches of the logged-in user
-        organization_id = self.kwargs.get('organization_id')
-        return OrganizationBranch.objects.filter(organization_name__owner=self.request.user, organization_name__id=organization_id)
+        organization_id = self.request.query_params.get('organization_id')
+        if organization_id:
+            return OrganizationBranch.objects.filter(organization_name=organization_id)
+        else:
+            return OrganizationBranch.objects.none() 
 
-
-# ----------------display  a particular branch------------------
+# ----------------display/update/delete  a particular branch------------------
     
 class OrganizationBranchDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = OrganizationBranchSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        organization_id = self.kwargs['organization_id']
-        # Retrieve organization branches of the logged-in user and for a specific organization
-        return OrganizationBranch.objects.filter(organization_name__owner=self.request.user, organization_name_id=organization_id)
+        return OrganizationBranch.objects.all()
 
+    def get_object(self):
+        branch_id = self.request.query_params.get('id')
+        try:
+            return OrganizationBranch.objects.get(id=branch_id)
+        except OrganizationBranch.DoesNotExist:
+            return Response({'error': 'Organization branch not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
-# --------------View for logout---------------------------   
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
-from django.contrib.auth import logout
+# --------------------------------View for logout---------------------------   
 
 class PlatformCustomerLogoutView(APIView):
     permission_classes = [IsAuthenticated]
@@ -353,12 +702,6 @@ class PlatformCustomerLogoutView(APIView):
         return Response({'message':'Logout Successfully'}, status=status.HTTP_200_OK)
     
 
-
-# -------views for platform customer delete view------------------------
-class PlatformCustomerDeleteView(generics.DestroyAPIView):
-    queryset = PlatformCustomer.objects.all()
-    serializer_class = PlatformCustomerSerializer
-    permission_classes = [IsAuthenticated]
 
 
 
@@ -437,3 +780,15 @@ class VerifyOTPView(APIView):
             
         except:
             return Response({'error':'User not found with this phone number'},status=status.HTTP_404_NOT_FOUND)
+
+
+
+class FieldTypeListView(APIView):
+    def get(self, request):
+      
+        field_types = FieldType.objects.all()
+        serializer = FieldTypeSerializer(field_types, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+

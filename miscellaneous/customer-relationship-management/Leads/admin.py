@@ -1,7 +1,8 @@
 from django.contrib import admin
-
+from .models import Leads,DefaultLeadCategory,DefaultLeadFields
 # Register your models here.
-from .models import Role,CustomerRole
 
-admin.site.register(Role)
-admin.site.register(CustomerRole)
+admin.site.register(Leads)
+admin.site.register(DefaultLeadCategory)
+
+admin.site.register(DefaultLeadFields)

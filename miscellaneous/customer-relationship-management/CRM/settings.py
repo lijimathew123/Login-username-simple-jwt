@@ -29,7 +29,7 @@ SECRET_KEY = 'django-insecure-*k&(be3rtx@2ye+#(o*89o1jgp#xuoqx=&hn95bknu7xe&s$@w
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -47,9 +47,13 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'Leads',
+    'customer',
+    'company',
+    'deals',
     'django_otp',
     'django_otp.plugins.otp_totp',
     'django_otp.plugins.otp_hotp',
+    'corsheaders',
 
     
     
@@ -78,6 +82,7 @@ AUTHENTICATION_BACKENDS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -85,6 +90,32 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
     'django_otp.middleware.OTPMiddleware',
+]
+
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:54941',  
+    'http://localhost:8080',  # Example: Vue frontend
+    # Add more origins as needed
+]
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:54941',  
+    'http://localhost:8080',  # Example: Vue frontend
+    # Add more origins as needed
+]
+CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS
+
+CORS_ORIGIN_ALLOW_ALL = True
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS= True
+
+#
+CORS_ALLOW_METHODS = [
+"DELETE",
+"GET",
+"OPTIONS",
+"PATCH",
+"POST",
+"PUT",
 ]
 
 ROOT_URLCONF = 'CRM.urls'
@@ -121,7 +152,7 @@ WSGI_APPLICATION = 'CRM.wsgi.application'
 DATABASES = {
    'default': {
          'ENGINE': 'django.db.backends.postgresql',
-         'NAME': 'CRM_management',
+         'NAME': 'crm-management',
          'USER': 'postgres',
          'PASSWORD': 'elkanio1234',
          'HOST': 'localhost',  # Set to the host where your PostgreSQL server is running
@@ -129,6 +160,14 @@ DATABASES = {
         
     }
  }
+
+# MONGODB_DATABASES = {
+#     'default': {
+#         'name': 'your_mongodb_database_name',
+#         'host': 'localhost',
+#         'port': 27017,
+#     }
+# }
 
 AUTH_USER_MODEL = 'account_app.PlatformCustomer'
 
@@ -181,6 +220,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 TWOFACTOR_API_KEY = '0490e129-d6df-11ee-8cbb-0200cd936042'
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST=''
+EMAIL_PORT = ''
+EMAIL_USE_TLS =True,
+EMAIL_HOST_USER = 'yor email'
+EMAIL_HOST_PASSWORD = 'password'
 
 # username=crm 
 # password = 1234

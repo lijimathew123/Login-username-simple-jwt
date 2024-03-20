@@ -1,16 +1,9 @@
 from rest_framework import serializers
+from company.models import *
 
-from .models import Role,CustomerRole
+from .models import DefaultLeadFields
 
-
-class RoleSerializer(serializers.ModelSerializer):
+class CompanySerializer(serializers.ModelSerializer):
     class Meta:
-        model=Role
-        fields = '__all__'
-
-
-
-class CustomerRoleSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CustomerRole
-        fields = '__all__'
+        model = Company
+        fields = '__all__' 

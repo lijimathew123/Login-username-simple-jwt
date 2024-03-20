@@ -2,23 +2,18 @@
 from django.conf import settings
 from django.urls import path
 from django.conf.urls.static import static
-from .views import (
-    RoleListCreateView,
-    RoleDetailView,
-    RoleAssignmentView,
-    CustomerRoleDetailView
-
-
-
-)
+from .views import *
 
 
 urlpatterns = [
-      
-     path('api/roles/', RoleListCreateView.as_view(), name='role-list-create'),
-     path('api/roles/<int:pk>/',RoleDetailView.as_view(), name='role-detail'),
-     path('api/customer-role/<int:organization_id>',RoleAssignmentView.as_view(), name='customer-role-assign'),
-     path('api/customer-role/<int:pk>/',CustomerRoleDetailView.as_view(), name='view-customer-role'),
+   path('api/get_default_fields/', DefaultFieldListView.as_view(), name='get_default_fields'),
+   path('api/update-default-field/', UpdateDefaultFieldView.as_view(), name='update_default_field'),
+   path('api/create_lead/', LeadCreateAPIView.as_view(), name='create_lead'),
+   path('api/UpdateLeadDataView/',UpdateLeadDataView.as_view(), name='update-lead-data'),
+   path('api/leads/', DeleteLeadAPIView.as_view(), name='delete_lead'),
+   path('api/get-lead-data/', LeadDetailsAPIView.as_view(), name='get_lead_data'),
+   path('api/get-organization-lead/', LeadsByOrganizationAPIView.as_view(), name='get_organization_lead'),
+   path('api/get-user-organization/', OwnerAndCustomersListView.as_view(), name='get_user_organization'),
 
       
 ]

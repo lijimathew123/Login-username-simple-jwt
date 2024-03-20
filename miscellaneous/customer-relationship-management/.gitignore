@@ -1,0 +1,5 @@
+/myenv
+env
+.*pyz
+.*env
+.*myenv
