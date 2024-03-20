@@ -7,12 +7,13 @@ from django.shortcuts import get_object_or_404, render
 
 
 from django.shortcuts import get_object_or_404
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions,status
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Employee
 from .serializers import EmployeeRegistrationSerializer, EmployeeLoginSerializer
 from django.contrib.auth.hashers import check_password
+from rest_framework.views import APIView
 
 
 
@@ -23,29 +24,37 @@ class EmployeeRegistrationView(generics.CreateAPIView):
     permission_classes = (permissions.AllowAny,)
 
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.hashers import check_password
+from .models import Employee
+from .serializers import EmployeeLoginSerializer
 
-
-
-
-class EmployeeLoginView(generics.CreateAPIView):
-   
-    serializer_class = EmployeeLoginSerializer
-    permission_classes = (permissions.AllowAny,)
-
+class EmployeeLoginAPIView(APIView):
     def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        serializer = EmployeeLoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        email = serializer.validated_data['email']
+        username = serializer.validated_data['username']
         password = serializer.validated_data['password']
 
-        user = get_object_or_404(Employee, email=email)
+        # Retrieve user by username
+        user = Employee.objects.filter(username=username).first()
 
+        if not user:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check password
         if not check_password(password, user.password):
-            return Response({'error': 'Invalid credentials'}, status=400)
+            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
+        # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
+        access_token = refresh.access_token
+
         return Response({
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-        })
+            'access_token': str(access_token),
+            'refresh_token': str(refresh),
+        }, status=status.HTTP_200_OK)

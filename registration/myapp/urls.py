@@ -1,7 +1,10 @@
 from django.urls import path
-from .views import EmployeeRegistrationView, EmployeeLoginView
+from .views import EmployeeRegistrationView,EmployeeLoginAPIView
+
 
 urlpatterns = [
     path('register/', EmployeeRegistrationView.as_view(), name='employee-register'),
-    path('login/', EmployeeLoginView.as_view(), name='employee-login'),
+    
+    path('api/token/', EmployeeLoginAPIView.as_view(), name='token_obtain_pair'),
+   
 ]
