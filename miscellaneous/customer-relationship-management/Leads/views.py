@@ -49,13 +49,31 @@ class DefaultFieldListView(APIView):
             if result:
                 # Convert ObjectId to string
                 result['_id'] = str(result['_id'])
-                return Response(result)
+                
+                # Transform the result to match the desired response structure
+                transformed_result = {
+                    "_id": result["_id"],
+                    "Type": result["Type"],
+                    "organization_id": result["organization_id"],
+                    "categories": []
+                }
+                
+                # Iterate over categories in the original result
+                for category in result["categories"]:
+                    # Create a new category dictionary
+                    new_category = {
+                        "category_name": category["category_name"],
+                        "fields": category["fields"]
+                    }
+                    # Append the new category to the transformed result
+                    transformed_result["categories"].append(new_category)
+
+                return Response(transformed_result)
             else:
                 return Response({'message': 'No data found for the specified organization_id and Type'}, status=404)
 
         except Exception as e:
             return Response({'error': str(e)}, status=500)
-        
 
 
 #  ------------------- Update default Lead  fields --------------------------- 
@@ -63,16 +81,14 @@ class DefaultFieldListView(APIView):
 
 class UpdateDefaultFieldView(APIView):
     permission_classes = [IsAuthenticated]
+
     def put(self, request, *args, **kwargs):
         try:
             # Retrieve data from the request
             data = request.data
             default_field_id = data.get('default_field_id')
-            updated_fields = data.get('fields')
+            updated_fields = data.get('categories')
             organization_id = data.get('organization_id')
-
-            # Connect to MongoDB
-           
 
             # Convert default_field_id to ObjectId
             default_field_id = ObjectId(default_field_id)
@@ -80,7 +96,7 @@ class UpdateDefaultFieldView(APIView):
             # Update the document in MongoDB
             result = default_lead_field.update_one(
                 {'_id': default_field_id, 'organization_id': organization_id},
-                {'$set': {'fields': updated_fields}}
+                {'$set': {'categories': updated_fields}}
             )
 
             if result.modified_count > 0:
@@ -114,13 +130,15 @@ class OwnerAndCustomersListView(APIView):
         owner_data = {
             'id': owner.id,
             'username': owner.username,
-            # Add other owner fields here if needed
+            'email': owner.email,
+            
         }
 
         customers_data = [
             {
                 'id': customer.id,
                 'username': customer.username,
+                'email': customer.email,
                 # Add other customer fields here if needed
             }
             for customer in associated_customers
@@ -233,10 +251,6 @@ class LeadsByOrganizationAPIView(APIView):
 
 
 #  ----------------------- View a lead --------------------- 
-
-
-
-
 
 class LeadDetailsAPIView(APIView):
     permission_classes = [IsAuthenticated]

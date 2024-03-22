@@ -7,12 +7,12 @@ import uuid
 class Deals(models.Model):
      id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
      organization = models.ForeignKey(Organization, on_delete=models.CASCADE)
-     owner = models.ForeignKey(PlatformCustomer, on_delete=models.CASCADE)
+     created_by = models.ForeignKey(PlatformCustomer, on_delete=models.CASCADE)
      name = models.CharField(max_length=100)
      created_at = models.PositiveIntegerField()
      last_stage_modified = models.PositiveIntegerField()
-     leads = models.ForeignKey(Leads, on_delete=models.CASCADE)
-     stage = models.PositiveIntegerField()
+     leads = models.ForeignKey(Leads, on_delete=models.CASCADE,null=True, blank=True)
+     stage = models.CharField()
      probability = models.PositiveIntegerField()
 
      class Meta:
@@ -51,6 +51,7 @@ class DefaultDealFields(models.Model):
     options = ArrayField(models.CharField(max_length=900), blank=True)
     regex_field = models.CharField(max_length=500, default="", blank=True, null=True)
     order = models.IntegerField(null=True, blank=True)
+    required = models.BooleanField(default=False)
     is_quick = models.BooleanField(default=False)
     is_static = models.BooleanField(default=False)
 

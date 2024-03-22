@@ -21,18 +21,17 @@ from account_app.mongo_connection import customer_collection,default_customer_fi
 #    ---------------------- fetch default fields of customer -----------------------   
 
 class DefaultCustomerFieldsAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
     def get(self, request, *args, **kwargs):
         try:
             # Retrieve query parameters
             organization_id = request.query_params.get('organization_id')
-            lead_type = request.query_params.get('Type')
-            
+            type = request.query_params.get('Type')
 
             # Query MongoDB collection based on organization_id and Type
             query = {
                 'organization_id': organization_id,
-                'Type': lead_type
+                'Type': type
             }
             result = default_customer_field.find_one(query)
 
@@ -40,13 +39,33 @@ class DefaultCustomerFieldsAPIView(APIView):
             if result:
                 # Convert ObjectId to string
                 result['_id'] = str(result['_id'])
-                return Response(result)
+                
+                # Transform the result to match the desired response structure
+                transformed_result = {
+                    "_id": result["_id"],
+                    "Type": result["Type"],
+                    "organization_id": result["organization_id"],
+                    "categories": []
+                }
+                
+                # Iterate over categories in the original result
+                for category in result["categories"]:
+                    # Create a new category dictionary
+                    new_category = {
+                        "category_name": category["category_name"],
+                        "fields": category["fields"]
+                    }
+                    # Append the new category to the transformed result
+                    transformed_result["categories"].append(new_category)
+
+                return Response(transformed_result)
             else:
                 return Response({'message': 'No data found for the specified organization_id and Type'}, status=404)
 
         except Exception as e:
             return Response({'error': str(e)}, status=500)
-    
+
+
 
 
 #  ---------------------------  update default fields of customer based on "default_field_id" ------------------------ 
@@ -55,16 +74,14 @@ class DefaultCustomerFieldsAPIView(APIView):
 
 class UpdateDefaultFieldView(APIView):
     permission_classes = [IsAuthenticated]
+
     def put(self, request, *args, **kwargs):
         try:
             # Retrieve data from the request
             data = request.data
             default_field_id = data.get('default_field_id')
-            updated_fields = data.get('fields')
+            updated_fields = data.get('categories')
             organization_id = data.get('organization_id')
-
-            
-           
 
             # Convert default_field_id to ObjectId
             default_field_id = ObjectId(default_field_id)
@@ -72,7 +89,7 @@ class UpdateDefaultFieldView(APIView):
             # Update the document in MongoDB
             result = default_customer_field.update_one(
                 {'_id': default_field_id, 'organization_id': organization_id},
-                {'$set': {'fields': updated_fields}}
+                {'$set': {'categories': updated_fields}}
             )
 
             if result.modified_count > 0:
@@ -82,7 +99,6 @@ class UpdateDefaultFieldView(APIView):
 
         except Exception as e:
             return Response({'error': str(e)}, status=500)
-        
 
     
 
@@ -102,13 +118,16 @@ class CustomerByOrganizationAPIView(APIView):
 
             response_data = []
             for customer in customers_data:
+                if 'lead_id' in customer:
+                    lead_id = customer['lead_id']
+                else:
+                    lead_id = None 
                 response_data.append({
-                    'lead_id': customer['lead_id'],
+                    'lead_id': lead_id,
                     'organization_id': customer['organization_id'],
                     'customer_id':customer['customer_id'],
-
                     'test': customer['test'],
-                    # Include additional fields as needed
+                    
                 })
 
             return Response(response_data, status=status.HTTP_200_OK)
@@ -121,31 +140,6 @@ class CustomerByOrganizationAPIView(APIView):
 
 # --------------------- get a customer by customer id ----------------------  
         
-# class CustomerDetailsAPIView(APIView):
-#     permission_classes = [IsAuthenticated]
-
-#     def get(self, request):
-#         try:
-#             # Get customer_id from query parameters
-#             customer_id = request.query_params.get('customer_id')
-
-#             # Check if customer_id is provided
-#             if not customer_id:
-#                 return Response({'error': 'customer_id parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
-
-#             # Retrieve customer details from customer_collection
-#             customer_data = customer_collection.find_one({'customer_id': customer_id})
-
-#             if customer_data:
-#                 # Convert ObjectId to string for _id field
-#                 customer_data['_id'] = str(customer_data['_id'])
-
-#                 return Response(customer_data, status=status.HTTP_200_OK)
-#             else:
-#                 return Response({'error': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
-
-#         except Exception as e:
-#             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class CustomerDetailsAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -155,6 +149,7 @@ class CustomerDetailsAPIView(APIView):
             # Get customer_id from query parameters
             customer_id = request.query_params.get('customer_id')
             customer_instance = Customer.objects.get(id=customer_id)
+            created_by_instance = customer_instance.created_by
 
             # Check if customer_id is provided
             if not customer_id:
@@ -182,8 +177,8 @@ class CustomerDetailsAPIView(APIView):
                 organization_instance = Organization.objects.get(id=organization_id)
                 organization_name = organization_instance.organization_name
 
-                # Retrieve additional data from PlatformCustomer model
-                created_by_instance = request.user
+              
+                
 
                 # Include 'lead_id' in the response data if available
                 response_data = {
@@ -194,10 +189,7 @@ class CustomerDetailsAPIView(APIView):
                     'company_id': company_id,
                     'company_name': company_name,
                     'test': customer_data['test'],
-                    'created_by': {
-                        'id': created_by_instance.id,
-                        'email': created_by_instance.email
-                    },
+                    'created_by_name': created_by_instance.get_full_name() if created_by_instance else None,
                     'created_at':customer_instance.created_at,
                     'last_modified_at': customer_instance.last_modified_at
                    

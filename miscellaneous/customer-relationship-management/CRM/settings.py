@@ -93,7 +93,7 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:54941',  
+    'http://localhost:4200',  
     'http://localhost:8080',  # Example: Vue frontend
     # Add more origins as needed
 ]

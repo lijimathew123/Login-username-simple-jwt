@@ -44,6 +44,8 @@ from .models import (
 from Leads.models import DefaultLeadFields,DefaultLeadCategory
 from customer.models import  DefaultCustomerCategory,DefaultCustomerFields
 from company.models import DefaultCompanyFields
+from deals.models import DefaultDealFields,DefaultDealStatus
+from bson import ObjectId
 
 
 from .serializers import (
@@ -59,11 +61,16 @@ from .serializers import (
     
 )
 
-from bson import ObjectId
 
-from .mongo_connection import person_collection,default_lead_field,default_customer_field,default_company_field
-# person_collection = db['Last_login']
-# default_field = db['Default Field']
+
+from .mongo_connection import (
+    person_collection,
+    default_lead_field,
+    default_customer_field,
+    default_company_field,
+    default_deal_field,
+    default_deal_status_field
+)
 
 
 # ------------views for save customer types--- (check the needs of creating custom admin module)---------
@@ -93,17 +100,7 @@ class PlatformCustomerCreateView(generics.CreateAPIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
 
-    # def perform_create(self, serializer):
-    #     # Get the current logged-in user
-    #     current_user = self.request.user
-    #     print(current_user.username)
-        
-        
-    #     if current_user.is_authenticated:
-    #         serializer.save(created_by=current_user)
-    #     else:
-    #         serializer.save()
-
+    
 
     def perform_create(self, serializer):
        
@@ -410,6 +407,7 @@ class PlatformCustomerDetailsUpdateView(generics.RetrieveUpdateAPIView):
 
 
 
+from collections import defaultdict
 
 
 #    ---------------------------use this below view now and  do not delete below view!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! -----------------------------------------
@@ -428,115 +426,248 @@ class OrganizationCreateView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
 
-        # Now, handle storing DefaultLeadFields data in MongoDB
+        
+       
+     
+              # Handle storing DefaultLeadFields data in MongoDB
         try:
-            # Retrieve all instances of DefaultLeadFields
-            all_leads = DefaultLeadFields.objects.all()
+              # Retrieve all instances of DefaultLeadFields
+                all_lead_fields = DefaultLeadFields.objects.all()
 
-            # Initialize an empty dictionary to store all lead data for each organization
-            organization_lead_data = {
-                'Type': 'Lead',
-                'organization_id': str(serializer.data['id']),
-                'fields': []
-            }
+                # Initialize a dictionary to store categories and their fields
+                categories_data = defaultdict(list)
 
-            # Iterate over each lead instance
-            for lead in all_leads:
-                lead_data = {}
-                for field in lead._meta.fields:
-                    field_name = field.name
-                    if field.is_relation:
-                        related_object = getattr(lead, field_name)
-                        if related_object:
-                            related_object_data = {'id': str(related_object.id), 'name': str(related_object)}
-                            lead_data[field_name] = related_object_data
-                    else:
-                        field_value = getattr(lead, field_name)
-                        lead_data[field_name] = field_value
-                
-                # Append the lead data to the list
-                organization_lead_data['fields'].append(lead_data)
+                # Iterate over each lead field instance
+                for lead_field in all_lead_fields:
+                    # Construct field data
+                    field_data = {
+                        'id': lead_field.id,
+                       
+                        'field_type': {
+                            'id': lead_field.field_type.id,
+                            'name': lead_field.field_type.name
+                        },
+                        'display_name': lead_field.display_name,
+                        'mem_variable': lead_field.mem_variable,
+                        'options': lead_field.options,
+                        'regex_field': lead_field.regex_field,
+                        'required': lead_field.required,
+                        'order': lead_field.order,
+                        'is_quick': lead_field.is_quick,
+                        'is_static': lead_field.is_static
+                    }
+                    # Append field data to the respective category
+                    categories_data[lead_field.catogory.name].append(field_data)
 
-            # Insert the organization's lead data into MongoDB
-            default_lead_field.insert_one(organization_lead_data)
-            print(organization_lead_data)
+                # Initialize organization_lead_data
+                organization_lead_data = {
+                    'Type': 'Lead',
+                    'organization_id': str(serializer.data['id']),
+                    'categories': []
+                }
+
+                # Append the categories data to the list
+                for category_name, fields in categories_data.items():
+                    category_data = {'category_name': category_name, 'fields': fields}
+                    organization_lead_data['categories'].append(category_data)
+
+                # Insert the organization's lead data into MongoDB
+                default_lead_field.insert_one(organization_lead_data)
 
         except DefaultLeadFields.DoesNotExist:
             pass
-    
-
         
+             
+             # Handle storing DefaultCustomerFields data in MongoDB
         try:
-            # Retrieve all instances of DefaultCustomerFields
-            all_customers = DefaultCustomerFields.objects.all()
+              # Retrieve all instances of DefaultLeadFields
+                all_customer_fields = DefaultCustomerFields.objects.all()
 
-            # Initialize an empty dictionary to store all customer data for each organization
-            organization_customer_data = {
-                'Type': 'Customer',
-                'organization_id': str(serializer.data['id']),
-                'fields': []
-            }
+                # Initialize a dictionary to store categories and their fields
+                categories_data = defaultdict(list)
 
-            # Iterate over each customer instance
-            for customer in all_customers:
-                customer_data = {}
-                for field in customer._meta.fields:
-                    field_name = field.name
-                    if field.is_relation:
-                        related_object = getattr(customer, field_name)
-                        if related_object:
-                            related_object_data = {'id': str(related_object.id), 'name': str(related_object)}
-                            customer_data[field_name] = related_object_data
-                    else:
-                        field_value = getattr(customer, field_name)
-                        customer_data[field_name] = field_value
-                
-                # Append the customer data to the list
-                organization_customer_data['fields'].append(customer_data)
+                # Iterate over each lead field instance
+                for customer_field in all_customer_fields:
+                    # Construct field data
+                    field_data = {
+                        'id': customer_field.id,
+                       
+                        'field_type': {
+                            'id': customer_field.field_type.id,
+                            'name': customer_field.field_type.name
+                        },
+                        'display_name': customer_field.display_name,
+                        'mem_variable': customer_field.mem_variable,
+                        'options': customer_field.options,
+                        'regex_field': customer_field.regex_field,
+                        'required': customer_field.required,
+                        'order': customer_field.order,
+                        'is_quick': customer_field.is_quick,
+                        'is_static': customer_field.is_static
+                    }
+                    # Append field data to the respective category
+                    categories_data[customer_field.catogory.name].append(field_data)
 
-            # Insert the organization's customer data into MongoDB
-            default_customer_field.insert_one(organization_customer_data)
+                # Initialize organization_lead_data
+                customer_lead_data = {
+                    'Type': 'Customer',
+                    'organization_id': str(serializer.data['id']),
+                    'categories': []
+                }
+
+                # Append the categories data to the list
+                for category_name, fields in categories_data.items():
+                    category_data = {'category_name': category_name, 'fields': fields}
+                    customer_lead_data['categories'].append(category_data)
+
+                # Insert the organization's lead data into MongoDB
+                default_customer_field.insert_one(customer_lead_data)
 
         except DefaultCustomerFields.DoesNotExist:
             pass
 
 
-        # Handle storing DefaultCompanyFields data in MongoDB
+
         try:
-            # Retrieve all instances of DefaultCompanyFields
-            all_companies = DefaultCompanyFields.objects.all()
+              
+                all_company_fields = DefaultCompanyFields.objects.all()
 
-            # Initialize an empty dictionary to store all company data for each organization
-            organization_company_data = {
-                'Type': 'Company',
-                'organization_id': str(serializer.data['id']),
-                'fields': []
-            }
+                # Initialize a dictionary to store categories and their fields
+                categories_data = defaultdict(list)
 
-            # Iterate over each company instance
-            for company in all_companies:
-                company_data = {}
-                for field in company._meta.fields:
-                    field_name = field.name
-                    if field.is_relation:
-                        related_object = getattr(company, field_name)
-                        if related_object:
-                            related_object_data = {'id': str(related_object.id), 'name': str(related_object)}
-                            company_data[field_name] = related_object_data
-                    else:
-                        field_value = getattr(company, field_name)
-                        company_data[field_name] = field_value
-                
-                # Append the company data to the list
-                organization_company_data['fields'].append(company_data)
+                # Iterate over each lead field instance
+                for company_field in all_company_fields:
+                    # Construct field data
+                    field_data = {
+                        'id': company_field.id,
+                       
+                        'field_type': {
+                            'id': company_field.field_type.id,
+                            'name': company_field.field_type.name
+                        },
+                        'display_name': company_field.display_name,
+                        'mem_variable': company_field.mem_variable,
+                        'options': company_field.options,
+                        'regex_field': company_field.regex_field,
+                        'required': company_field.required,
+                        'order': company_field.order,
+                        'is_quick': company_field.is_quick,
+                        'is_static': company_field.is_static
+                    }
+                    # Append field data to the respective category
+                    categories_data[company_field.catogory.name].append(field_data)
 
-            # Insert the organization's company data into MongoDB
-            default_company_field.insert_one(organization_company_data)
+                # Initialize organization_lead_data
+                company_field_data = {
+                    'Type': 'Customer',
+                    'organization_id': str(serializer.data['id']),
+                    'categories': []
+                }
+
+                # Append the categories data to the list
+                for category_name, fields in categories_data.items():
+                    category_data = {'category_name': category_name, 'fields': fields}
+                    company_field_data['categories'].append(category_data)
+
+                # Insert the organization's lead data into MongoDB
+                default_company_field.insert_one(company_field_data)
 
         except DefaultCompanyFields.DoesNotExist:
             pass
 
 
+
+              # Handle storing DefaultDealFields data in MongoDB
+        try:
+              
+                all_deal_fields = DefaultDealFields.objects.all()
+
+                # Initialize a dictionary to store categories and their fields
+                categories_data = defaultdict(list)
+
+                # Iterate over each lead field instance
+                for deal_field in all_deal_fields:
+                    # Construct field data
+                    field_data = {
+                        'id': company_field.id,
+                       
+                        'field_type': {
+                            'id': deal_field.field_type.id,
+                            'name': deal_field.field_type.name
+                        },
+                        'display_name': deal_field.display_name,
+                        'mem_variable': deal_field.mem_variable,
+                        'options': deal_field.options,
+                        'regex_field': deal_field.regex_field,
+                        'required': deal_field.required,
+                        'order': deal_field.order,
+                        'is_quick': deal_field.is_quick,
+                        'is_static': deal_field.is_static
+                    }
+                    # Append field data to the respective category
+                    categories_data[deal_field.catogory.name].append(field_data)
+
+                # Initialize organization_lead_data
+                company_field_data = {
+                    'Type': 'Deal',
+                    'organization_id': str(serializer.data['id']),
+                    'categories': []
+                }
+
+                # Append the categories data to the list
+                for category_name, fields in categories_data.items():
+                    category_data = {'category_name': category_name, 'fields': fields}
+                    company_field_data['categories'].append(category_data)
+
+                # Insert the organization's lead data into MongoDB
+                default_deal_field.insert_one(company_field_data)
+
+        except DefaultCompanyFields.DoesNotExist:
+            pass
+      
+        
+        try:
+                # Retrieve all instances of DefaultDealStatus
+            all_deal_statuses = DefaultDealStatus.objects.all()
+
+            # Initialize a list to store all deal statuses
+            deal_statuses = []
+
+            # Iterate over each deal status instance and extract required data
+            for deal_status in all_deal_statuses:
+                status_data = {
+                    'status': deal_status.stage,
+                    'probability': deal_status.probability
+                }
+                deal_statuses.append(status_data)
+
+            # Create a document to store all deal statuses
+            deal_status_document = {
+                'Type': 'Deal Status',
+                'organization_id': str(serializer.data['id']),
+                'statuses': deal_statuses
+            }
+
+            # Insert the organization's deal statuses into MongoDB
+            default_deal_status_field.insert_one(deal_status_document)
+
+        except DefaultDealStatus.DoesNotExist:
+            pass
+
+
+
+
+
+
+
+                
+        
+
+
+       
+
+         
+       
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -792,3 +923,26 @@ class FieldTypeListView(APIView):
 
 
 
+
+#  ------------------------ view for get details of organization of current logged in user ------------------------
+    
+class LoggedUserOrganizationAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        # Get the current logged-in user
+        user = request.user
+
+        # Check if the user is authenticated
+        if not user.is_authenticated:
+            return Response({'error': 'User not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Retrieve the organization details associated with the user
+        if user.platform_customer_owner.exists():
+            organizations = Organization.objects.filter(owner=user)
+        else:
+            organizations = Organization.objects.filter(customerorganization__customer=user)
+
+        # Serialize the organization details
+        serializer = OrganizationSerializer(organizations, many=True)
+
+        return Response({'organizations': serializer.data}, status=status.HTTP_200_OK)

@@ -26,6 +26,7 @@ from .views import (
     PlatformUserUpdateView,
     SocialChannelsListAPIView,
     FieldTypeListView,
+    LoggedUserOrganizationAPIView
    
    
 )
@@ -61,6 +62,7 @@ urlpatterns = [
       path('api/verify-otp/', VerifyOTPView.as_view(), name='verify-otp'),
       path('api/social-channels/', SocialChannelsListAPIView.as_view(), name='social-channels-list'),
       path('api/field-types/', FieldTypeListView.as_view(), name='field_types_list'),
+      path('api/logged-in-user-organization/', LoggedUserOrganizationAPIView.as_view(), name='logged-in_user_organization'),
      
 
 

@@ -42,6 +42,7 @@ class DefaultCustomerFields(models.Model):
     options = ArrayField(models.CharField(max_length=900), blank=True)
     regex_field = models.CharField(max_length=500, default="",blank=True, null=True)
     order = models.IntegerField(null=True, blank=True)
+    required = models.BooleanField(default=False)
     is_quick = models.BooleanField(default=False)
     is_static = models.BooleanField(default=False)
 
